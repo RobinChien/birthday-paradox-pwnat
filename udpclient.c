@@ -75,6 +75,7 @@ bool isnumber(const char* str) {
  */
 int udpclient(int argc, char* argv[])
 {
+       
     char *lhost, *lport, *phost, *pport, *rhost, *rport;
     list_t *clients;
     list_t *conn_clients;
@@ -100,7 +101,9 @@ int udpclient(int argc, char* argv[])
     int num_fds;
     
     int ret;
-    int i;
+    int i,l;
+    int size = 70000000;
+    int *port_array = malloc(size * sizeof(int));
 
     int icmp_sock = 0;
     int timeexc = 0;
@@ -122,13 +125,29 @@ int udpclient(int argc, char* argv[])
     if (isnumber(argv[i]))
         pport = argv[i++];
     else	
-        pport = pport_s;
+    pport = pport_s;
     rhost = argv[i++];
     rport = argv[i++];
 
+    /*set random port*/
+    for (l = 0; l < size; l++)
+    {
+        port_array[l] = l + 1024;
+    }
+    srand((unsigned)time(NULL));
+
+    for (l = 0; l < size; l++)
+    {
+        int temp = port_array[l];
+        int rand_result = (rand() % 64512 + 1023);
+        port_array[l] = port_array[rand_result];
+        port_array[rand_result] = temp;
+    }
+
     /* Get address from the machine */
 	rsrc.sin_family = PF_INET;
-	rsrc.sin_addr.s_addr = INADDR_ANY;
+    rsrc.sin_addr.s_addr = INADDR_ANY;
+    
 	if (lhost)
 	{
 		hp = gethostbyname(lhost);
@@ -242,29 +261,35 @@ int udpclient(int argc, char* argv[])
            and UDP connection if one is ready */
         if(FD_ISSET(SOCK_FD(tcp_serv), &read_fds))
         {
-            tcp_sock = sock_accept(tcp_serv);            
-            udp_sock = sock_create(phost, pport, ipver,
-                                   SOCK_TYPE_UDP, 0, 1);
+            for(l=0; l<size; l++)
+            {
+                char ran_port[32];
+                sprintf(ran_port, "%d", port_array[l]);
+                printf("%d\n", port_array[l]);
+                tcp_sock = sock_accept(tcp_serv);
+                udp_sock = sock_create(phost, ran_port, ipver,
+                                       SOCK_TYPE_UDP, 0, 1);
 
-            client = client_create(next_req_id++, tcp_sock, udp_sock, 1);
-            if(!client || !tcp_sock || !udp_sock)
-            {
-                if(tcp_sock)
-                    sock_close(tcp_sock);
-                if(udp_sock)
-                    sock_close(udp_sock);
+                client = client_create(next_req_id++, tcp_sock, udp_sock, 1);
+                if (!client || !tcp_sock || !udp_sock)
+                {
+                    if (tcp_sock)
+                        sock_close(tcp_sock);
+                    if (udp_sock)
+                        sock_close(udp_sock);
+                }
+                else
+                {
+                    client2 = list_add(conn_clients, client);
+                    client_free(client);
+                    client = NULL;
+
+                    client_send_hello(client2, rhost, rport, CLIENT_ID(client2));
+                    client_add_tcp_fd_to_set(client2, &client_fds);
+                    client_add_udp_fd_to_set(client2, &client_fds);
+                }
             }
-            else
-            {
-                client2 = list_add(conn_clients, client);
-                client_free(client);
-                client = NULL;
-                
-                client_send_hello(client2, rhost, rport, CLIENT_ID(client2));
-                client_add_tcp_fd_to_set(client2, &client_fds);
-                client_add_udp_fd_to_set(client2, &client_fds);
-            }
-            
+
             sock_free(tcp_sock);
             sock_free(udp_sock);
             tcp_sock = NULL;

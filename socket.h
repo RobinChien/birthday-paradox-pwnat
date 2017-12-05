@@ -33,6 +33,7 @@
 
 #include "common.h"
 
+#define BUFLEN 2048
 #define BACKLOG 10
 #define ADDRSTRLEN (INET6_ADDRSTRLEN + 7)
 

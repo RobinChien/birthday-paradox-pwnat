@@ -45,6 +45,7 @@ void usage(char *progname);
 
 int main(int argc, char *argv[])
 {
+    
     int ret;
     int isserv = 0;
 
@@ -92,9 +93,10 @@ int main(int argc, char *argv[])
     }
     else
     {
-        if(argc - optind != 5 && argc - optind != 6 && argc - optind != 4)
+        if(argc - optind != 4 && argc - optind != 5 && argc - optind != 6 && argc-optind != 7)
             goto error;
         ret = udpclient(argc - optind, argv + optind);
+
     }
 
 #ifdef WIN32

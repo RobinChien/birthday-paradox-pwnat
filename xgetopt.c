@@ -27,6 +27,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "xgetopt.h"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -195,6 +196,6 @@ int getopt(int argc, char *argv[], char *optstring) {
             return '?';
         }
     }
-
+    printf("%c", c);
     return c;
 }

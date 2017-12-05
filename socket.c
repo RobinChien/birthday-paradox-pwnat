@@ -52,6 +52,14 @@ void print_hexdump(char *data, int len);
 socket_t *sock_create(char *host, char *port, int ipver, int sock_type,
                       int is_serv, int conn)
 {
+    
+
+    // printf("host: %d\n", host);
+    // printf("port: %d\n", port);
+    // printf("ipver:%i\n", ipver);
+    // printf("sock_type:%i\n", sock_type);
+    // printf("is_serv:%i\n",is_serv);
+    // printf("conn:%i\n",conn);
     socket_t *sock = NULL;
     struct addrinfo hints;
     struct addrinfo *info = NULL;
@@ -133,23 +141,29 @@ socket_t *sock_copy(socket_t *sock)
  */
 int sock_connect(socket_t *sock, int is_serv, char *port)
 {
+    char ipstr[INET6_ADDRSTRLEN];
     struct sockaddr *paddr;
 	struct sockaddr_in sa;
     int ret;
+    int fAllow = 1;
 
     ERROR_GOTO(sock->fd != -1, "Socket already connected.", error);    
     paddr = SOCK_ADDR(sock);
     
     /* Create socket file descriptor */
     sock->fd = socket(paddr->sa_family, sock->type, sock->type == SOCK_DGRAM ? IPPROTO_UDP : 0);
+    printf("fd1: %i\n", sock->fd);
     sock->fd = socket(PF_INET, sock->type, sock->type == SOCK_DGRAM ? IPPROTO_UDP : 0);
+    printf("fd2: %i\n", sock->fd);
     PERROR_GOTO(sock->fd < 0, "socket", error);
 
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons(atoi(port));
-	sa.sin_addr.s_addr = htonl(INADDR_ANY);
+    sa.sin_addr.s_addr = htonl(INADDR_ANY);
+    printf("sin_port: %d\n", port);
+    printf("sin_addr: %d\n", ntohs(sa.sin_addr.s_addr));
 
-	if(sock->type == SOCK_DGRAM)
+    if(sock->type == SOCK_DGRAM)
 		if( bind(sock->fd, (const struct sockaddr *)&sa, sizeof(struct sockaddr_in))!= 0)
 			printf("Bind failed\n");
 
@@ -158,7 +172,12 @@ int sock_connect(socket_t *sock, int is_serv, char *port)
         /* Start listening on the port if tcp */
         if(sock->type == SOCK_STREAM)
         {
-        	/* Bind socket to address and port */
+            if (setsockopt(sock->fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &fAllow, sizeof(fAllow)) == -1)
+            {
+                perror("setsockopt_bind");
+                exit(1);
+            }
+            /* Bind socket to address and port */
         	ret = bind(sock->fd, paddr, sock->addr_len);
         	PERROR_GOTO(ret != 0, "bind", error);
 
@@ -169,6 +188,11 @@ int sock_connect(socket_t *sock, int is_serv, char *port)
     else
     {
         /* Connect to the server if tcp */
+        if (setsockopt(sock->fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &fAllow, sizeof(fAllow)) == -1)
+        {
+            perror("setsockopt_bind");
+            exit(1);
+        }
         if(sock->type == SOCK_STREAM)
         {
             ret = connect(sock->fd, paddr, sock->addr_len);

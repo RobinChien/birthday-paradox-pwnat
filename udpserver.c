@@ -62,6 +62,9 @@ static void signal_handler(int sig);
  */
 int udpserver(int argc, char *argv[])
 {
+    printf("ipver: %i\n", ipver);
+    printf("s_argc: %i\n", argc);
+
     char host_str[ADDRSTRLEN];
     char port_str[ADDRSTRLEN];
     char addrstr[ADDRSTRLEN];
@@ -70,7 +73,10 @@ int udpserver(int argc, char *argv[])
     list_t *allowed_destinations = NULL;
     socket_t *udp_sock = NULL;
     socket_t *udp_from = NULL;
+    socket_t *udp_remote = NULL;
+    socket_t *udp_remote_from = NULL;
     char data[MSG_MAX_LEN];
+    char fps[BUFLEN];
 
     client_t *client;
     uint16_t tmp_id;
@@ -81,6 +87,7 @@ int udpserver(int argc, char *argv[])
     struct timeval timeout;
     struct timeval check_time;
     struct timeval check_interval;
+    fd_set remote_fds;
     fd_set client_fds;
     fd_set read_fds;
     int num_fds;
@@ -92,12 +99,36 @@ int udpserver(int argc, char *argv[])
     int icmp_sock = 0;
     int listen_sock = 0;
     int timeexc = 0;
-    struct sockaddr_in dest_addr, rsrc;
+    struct sockaddr_in dest_addr, rsrc, remote_addr;
     uint32_t timeexc_ip;
     struct hostent *host_ent;
 
     signal(SIGINT, &signal_handler);
+    sprintf(port_str, "80");
 
+    memset(&remote_addr, 0, sizeof(struct sockaddr_in));
+    host_ent = gethostbyname("goodnana1225.ddns.net");
+    timeexc_ip = *(uint32_t *)host_ent->h_addr_list[0];
+    remote_addr.sin_family = AF_INET;
+    remote_addr.sin_port = htons(atoi(port_str));
+    remote_addr.sin_addr.s_addr = timeexc_ip;
+
+    udp_remote = sock_create("goodnana1225.ddns.net", port_str,
+                             SOCK_IPV4, SOCK_TYPE_UDP, 1, 1);
+    if (!udp_remote)
+        goto done;
+
+    // if (debug_level >= DEBUG_LEVEL1)
+    //     printf("Listening on UDP %s\n",
+    //            sock_get_str(udp_remote, addrstr, sizeof(addrstr)));
+    FD_ZERO(&remote_fds);
+
+    timerclear(&timeout);
+    gettimeofday(&check_time, NULL);
+    sprintf(fps, "first send");
+
+    sendto(udp_remote->fd, fps, strlen(fps), 0, (struct sockaddr*)&remote_addr, sizeof(struct sockaddr));
+    printf("send first package to goodnana1225.ddns.net:80\n");
 
     /* Get info about where we're sending time exceeded */
     memset(&dest_addr, 0, sizeof(struct sockaddr_in));
@@ -106,7 +137,7 @@ int udpserver(int argc, char *argv[])
     dest_addr.sin_family        = AF_INET;
     dest_addr.sin_port          = 0;
     dest_addr.sin_addr.s_addr   = timeexc_ip;
-
+    
     /* Scan for start of allowed destination parameters */
     allowed_start = argc;
     for (i = 0; i < argc; i++)
@@ -148,6 +179,7 @@ int udpserver(int argc, char *argv[])
     /* Build allowed destination list */
     if (argc > allowed_start)
     {
+
         allowed_destinations = list_create(sizeof(destination_t),
                                            p_destination_cmp,
                                            p_destination_copy,
@@ -177,22 +209,28 @@ int udpserver(int argc, char *argv[])
         char szHostName[255];
         gethostname(szHostName, 255);
         host_ent = gethostbyname(szHostName);
+        printf("szHostName1 %d\n", *(uint32_t *)host_ent->h_addr_list[0]);
     }
     else
     {
         host_ent = gethostbyname(host_str);
+        printf("szHostName2 %s\n", host_ent->h_name);
     }
+
     memset(&rsrc, 0, sizeof(struct sockaddr_in));
     timeexc_ip                = *(uint32_t*)host_ent->h_addr_list[0];
     rsrc.sin_family        = AF_INET;
     rsrc.sin_port          = 0;
     rsrc.sin_addr.s_addr   = timeexc_ip;
 
-
+    printf("host_str[0]: %d\n", host_str[0]);
+    printf("timeexc_ip %" PRIu32 "\n", timeexc_ip);
     /* Create the socket to receive UDP messages on the specified port */
     udp_sock = sock_create((host_str[0] == 0 ? NULL : host_str), port_str,
                            ipver, SOCK_TYPE_UDP, 1, 1);
+    printf("port_str: %s\n", port_str);
 
+    printf("udp_sock: %i\n", *udp_sock);
     if(!udp_sock)
         goto done;
 
@@ -373,6 +411,11 @@ int udpserver(int argc, char *argv[])
         list_free(allowed_destinations);
     if(clients)
         list_free(clients);
+    if (udp_remote)
+    {
+        sock_close(udp_remote);
+        sock_free(udp_remote);
+    }
     if(udp_sock)
     {
         sock_close(udp_sock);
@@ -380,6 +423,8 @@ int udpserver(int argc, char *argv[])
     }
     if(udp_from)
         sock_free(udp_from);
+    if (udp_remote_from)
+        sock_free(udp_remote_from);
     if(debug_level >= DEBUG_LEVEL1)
         printf("Goodbye.\n");
     
